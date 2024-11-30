@@ -5,7 +5,7 @@ from data_preprocessing import FaceDataset
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score
 import numpy as np
-
+#未完成，没有什么意义 e e e
 def evaluate_model(model, dataloader):
     model.eval()
     all_preds, all_labels = [], []

@@ -1,17 +1,16 @@
 import torch
 import torch.optim as optim
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from data_preprocessing import FaceDataset  # 导入自定义数据集加载模块
 from my_face_model import MyFaceRecognitionModel  # 导入自定义的模型模块
 from sklearn.metrics import accuracy_score, f1_score  # 用于计算评估指标
 import os
 from tqdm import tqdm  # 用于显示进度条
-
+# from arcface_loss import ArcFaceLoss  # 确保引入 ArcFace 损失
 
 def train_model(dataset_dir, test_dataset_dir, save_model_path, epochs=20, batch_size=32, embedding_size=128):
     """
-    训练模型的主函数。
+    使用ArcFace损失函数训练模型的主函数。
 
     Args:
         dataset_dir (str): 训练数据集路径。
@@ -27,10 +26,10 @@ def train_model(dataset_dir, test_dataset_dir, save_model_path, epochs=20, batch
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    # 初始化模型、优化器和损失函数
+    # 初始化模型、优化器和ArcFace损失函数
     model = MyFaceRecognitionModel(embedding_size=embedding_size).cuda()  # 将模型加载到 GPU 上
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = nn.CrossEntropyLoss()
+    criterion = ArcFaceLoss(embedding_size=embedding_size, num_classes=train_dataset.get_num_classes()).cuda()  # 使用ArcFace损失
 
     for epoch in range(epochs):
         model.train()
@@ -40,8 +39,8 @@ def train_model(dataset_dir, test_dataset_dir, save_model_path, epochs=20, batch
 
             # 前向传播、计算损失、反向传播并更新参数
             optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            embeddings = model(images)
+            loss = criterion(embeddings, labels)  # 使用ArcFace损失
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
@@ -52,8 +51,8 @@ def train_model(dataset_dir, test_dataset_dir, save_model_path, epochs=20, batch
         with torch.no_grad():
             for images, labels in test_loader:
                 images, labels = images.cuda(), labels.cuda()
-                outputs = model(images)
-                _, predicted = torch.max(outputs, 1)
+                embeddings = model(images)
+                _, predicted = torch.max(embeddings, 1)
                 all_preds.extend(predicted.cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
 
@@ -66,7 +65,6 @@ def train_model(dataset_dir, test_dataset_dir, save_model_path, epochs=20, batch
         # 保存模型
         torch.save(model.state_dict(), save_model_path)
         print(f"模型已保存至 {save_model_path}")
-
 
 if __name__ == "__main__":
     # 执行训练
